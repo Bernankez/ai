@@ -11,6 +11,7 @@ class BookmarkDirExtractor(HTMLParser):
         super().__init__()
         self.depth = -1
         self.in_h3 = False
+        self._current_title = ""
         self.dirs = []  # list of (depth, name)
 
     def handle_starttag(self, tag, attrs):
