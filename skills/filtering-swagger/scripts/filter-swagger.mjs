@@ -66,7 +66,7 @@ for (const [path, methods] of Object.entries(swagger.paths ?? {})) {
 
 // 3. Collect referenced schemas recursively
 function collectRefs(obj, refs) {
-  if (obj == null || typeof obj !== "object") return;
+  if (obj == null || typeof obj !== "object") { return; }
   if (typeof obj.$ref === "string") {
     const prefix = "#/components/schemas/";
     if (obj.$ref.startsWith(prefix)) {
@@ -74,7 +74,7 @@ function collectRefs(obj, refs) {
       if (!refs.has(name)) {
         refs.add(name);
         const schema = swagger.components?.schemas?.[name];
-        if (schema) collectRefs(schema, refs);
+        if (schema) { collectRefs(schema, refs); }
       }
     }
   }
