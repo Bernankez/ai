@@ -1,4 +1,5 @@
 import type { Target } from "./skill-manager.js";
+import { execFile } from "node:child_process";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import process from "node:process";
@@ -6,11 +7,30 @@ import { checkbox, select } from "@inquirer/prompts";
 import pc from "picocolors";
 import { getLinkStatus, getSkills, linkSkill, unlinkSkill } from "./skill-manager.js";
 
-const TARGETS: Target[] = [
-  { name: "Claude Code", path: join(homedir(), ".claude", "skills") },
-  { name: "Amp (agents)", path: join(homedir(), ".config", "agents", "skills") },
-  { name: "Amp (amp)", path: join(homedir(), ".config", "amp", "skills") },
+interface TargetEntry {
+  target: Target;
+  commands: string[];
+}
+
+const TARGETS: TargetEntry[] = [
+  { target: { name: "Claude Code", path: join(homedir(), ".claude", "skills") }, commands: ["claude"] },
+  { target: { name: "Amp (agents)", path: join(homedir(), ".config", "agents", "skills") }, commands: ["amp"] },
+  { target: { name: "Amp (amp)", path: join(homedir(), ".config", "amp", "skills") }, commands: ["amp"] },
+  { target: { name: "Factory", path: join(homedir(), ".factory", "skills") }, commands: ["droid"] },
 ];
+
+function isCommandInstalled(command: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile("which", [command], (error) => {
+      resolve(!error);
+    });
+  });
+}
+
+async function isInstalled(commands: string[]): Promise<boolean> {
+  const results = await Promise.all(commands.map(isCommandInstalled));
+  return results.some(Boolean);
+}
 
 const SKILLS_DIR = resolve(import.meta.dirname, "..", "skills");
 
@@ -67,13 +87,17 @@ async function main(): Promise<void> {
     return;
   }
 
+  const targetChoices = await Promise.all(
+    TARGETS.map(async ({ target, commands }) => ({
+      name: `${target.name} (${pc.dim(target.path)})`,
+      value: target,
+      checked: await isInstalled(commands),
+    })),
+  );
+
   const selectedTargets = await checkbox<Target>({
     message: "Select targets",
-    choices: TARGETS.map(t => ({
-      name: `${t.name} (${pc.dim(t.path)})`,
-      value: t,
-      checked: false,
-    })),
+    choices: targetChoices,
     required: true,
   });
 
