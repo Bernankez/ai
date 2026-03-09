@@ -9,7 +9,9 @@ Generate a concise one-line git commit message based on the current uncommitted 
 
 ## Workflow
 
-1. Run `git diff --cached` to get staged changes. If empty, fall back to `git diff` for unstaged changes.
+1. Run `git diff --cached --name-only` to check for staged files.
+   - If there are staged files, run `git diff --cached` to get **only staged changes**.
+   - If no staged files, run `git diff` to get all unstaged changes.
 2. Analyze the diff to understand what changed (files modified, functionality added/removed/fixed).
 3. Generate a single-line commit message following the conventions below.
 
