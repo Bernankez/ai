@@ -1,4 +1,4 @@
-import type { Target } from "./skill-manager.js";
+import type { LinkResult, Target } from "./skill-manager.js";
 import { execFile } from "node:child_process";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -45,22 +45,28 @@ function statusIcon(status: "linked" | "conflict" | "not_linked"): string {
   }
 }
 
-function formatResult(result: { skill: string; target: Target; action: string }): string {
-  const label = `${result.skill} → ${result.target.name}`;
-  switch (result.action) {
-    case "linked":
-      return pc.green(`  ${label}: linked ✓`);
-    case "already_linked":
-      return pc.dim(`  ${label}: already linked, skipped`);
-    case "unlinked":
-      return pc.green(`  ${label}: unlinked ✓`);
-    case "not_linked":
-      return pc.dim(`  ${label}: not linked, skipped`);
-    case "conflict":
-      return pc.yellow(`  ${label}: path exists but is not our symlink, skipped`);
-    default:
-      return `  ${label}: ${result.action}`;
+function printSummary(results: LinkResult[]): void {
+  const linked = results.filter(r => r.action === "linked").length;
+  const unlinked = results.filter(r => r.action === "unlinked").length;
+  const skipped = results.filter(r => r.action === "already_linked" || r.action === "not_linked").length;
+  const conflicts = results.filter(r => r.action === "conflict").length;
+
+  const parts: string[] = [];
+  if (linked > 0) {
+    parts.push(pc.green(`${linked} linked`));
   }
+  if (unlinked > 0) {
+    parts.push(pc.green(`${unlinked} unlinked`));
+  }
+  if (skipped > 0) {
+    parts.push(pc.dim(`${skipped} skipped`));
+  }
+  if (conflicts > 0) {
+    parts.push(pc.yellow(`${conflicts} conflict`));
+  }
+
+  const icon = conflicts > 0 ? pc.yellow("⚠") : pc.green("✓");
+  console.log(`  ${icon} ${parts.join(", ")}\n`);
 }
 
 async function printStatus(skills: string[], targets: Target[]): Promise<void> {
@@ -96,13 +102,18 @@ async function main(): Promise<void> {
   );
 
   const selectedTargets = await checkbox<Target>({
-    message: "Select targets",
+    message: `Select targets ${pc.dim("(Esc to quit)")}`,
     choices: targetChoices,
     required: true,
   });
 
+  let lastResults: LinkResult[] = [];
   while (true) {
     await printStatus(skills, selectedTargets);
+    if (lastResults.length > 0) {
+      printSummary(lastResults);
+      lastResults = [];
+    }
 
     const action = await select({
       message: "Action",
@@ -119,46 +130,46 @@ async function main(): Promise<void> {
       break;
     }
 
+    const results: LinkResult[] = [];
+
     if (action === "install") {
       const selected = await checkbox({
-        message: "Select skills to install",
+        message: `Select skills to install ${pc.dim("(Esc to cancel)")}`,
         choices: skills.map(s => ({ name: s, value: s })),
       });
       for (const skill of selected) {
         for (const target of selectedTargets) {
-          const result = await linkSkill(SKILLS_DIR, skill, target);
-          console.log(formatResult(result));
+          results.push(await linkSkill(SKILLS_DIR, skill, target));
         }
       }
     }
     else if (action === "uninstall") {
       const selected = await checkbox({
-        message: "Select skills to uninstall",
+        message: `Select skills to uninstall ${pc.dim("(Esc to cancel)")}`,
         choices: skills.map(s => ({ name: s, value: s })),
       });
       for (const skill of selected) {
         for (const target of selectedTargets) {
-          const result = await unlinkSkill(SKILLS_DIR, skill, target);
-          console.log(formatResult(result));
+          results.push(await unlinkSkill(SKILLS_DIR, skill, target));
         }
       }
     }
     else if (action === "install_all") {
       for (const skill of skills) {
         for (const target of selectedTargets) {
-          const result = await linkSkill(SKILLS_DIR, skill, target);
-          console.log(formatResult(result));
+          results.push(await linkSkill(SKILLS_DIR, skill, target));
         }
       }
     }
     else if (action === "remove_all") {
       for (const skill of skills) {
         for (const target of selectedTargets) {
-          const result = await unlinkSkill(SKILLS_DIR, skill, target);
-          console.log(formatResult(result));
+          results.push(await unlinkSkill(SKILLS_DIR, skill, target));
         }
       }
     }
+
+    lastResults = results;
   }
 
   console.log(pc.dim("Bye!"));
