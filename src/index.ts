@@ -1,5 +1,6 @@
 import type { LinkResult, Target } from "./skill-manager.js";
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import process from "node:process";
@@ -10,12 +11,15 @@ import { getLinkStatus, getSkills, linkSkill, unlinkSkill } from "./skill-manage
 interface TargetEntry {
   target: Target;
   commands: string[];
+  appPaths?: string[];
 }
 
 const TARGETS: TargetEntry[] = [
   { target: { name: "Claude Code", path: join(homedir(), ".claude", "skills") }, commands: ["claude"] },
   { target: { name: "Amp (agents)", path: join(homedir(), ".config", "agents", "skills") }, commands: ["amp"] },
   { target: { name: "Amp (amp)", path: join(homedir(), ".config", "amp", "skills") }, commands: ["amp"] },
+  { target: { name: "VS Code (Copilot)", path: join(homedir(), ".copilot", "skills") }, commands: ["code"], appPaths: ["/Applications/Visual Studio Code.app"] },
+  { target: { name: "Cursor", path: join(homedir(), ".cursor", "skills") }, commands: ["cursor"], appPaths: ["/Applications/Cursor.app"] },
   { target: { name: "Factory", path: join(homedir(), ".factory", "skills") }, commands: ["droid"] },
 ];
 
@@ -27,9 +31,10 @@ function isCommandInstalled(command: string): Promise<boolean> {
   });
 }
 
-async function isInstalled(commands: string[]): Promise<boolean> {
-  const results = await Promise.all(commands.map(isCommandInstalled));
-  return results.some(Boolean);
+async function isInstalled({ commands, appPaths }: { commands: string[]; appPaths?: string[] }): Promise<boolean> {
+  const commandCheck = Promise.all(commands.map(isCommandInstalled)).then(r => r.some(Boolean));
+  const pathCheck = appPaths?.some(p => existsSync(p)) ?? false;
+  return pathCheck || await commandCheck;
 }
 
 const SKILLS_DIR = resolve(import.meta.dirname, "..", "skills");
@@ -94,10 +99,10 @@ async function main(): Promise<void> {
   }
 
   const targetChoices = await Promise.all(
-    TARGETS.map(async ({ target, commands }) => ({
+    TARGETS.map(async ({ target, commands, appPaths }) => ({
       name: `${target.name} (${pc.dim(target.path)})`,
       value: target,
-      checked: await isInstalled(commands),
+      checked: await isInstalled({ commands, appPaths }),
     })),
   );
 
