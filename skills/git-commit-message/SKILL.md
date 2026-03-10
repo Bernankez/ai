@@ -33,4 +33,8 @@ Generate a concise one-line git commit message based on the current uncommitted 
 
 ## Output
 
-Print only the generated commit message line. Do not include explanation or commentary.
+1. Print only the generated commit message line. Do not include explanation or commentary.
+2. Copy the generated commit message to the system clipboard:
+   - macOS: `pbcopy`
+   - Linux: `xclip -selection clipboard` or `xsel --clipboard`
+   - Windows: `clip`
