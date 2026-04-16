@@ -1,23 +1,31 @@
 ---
-name: delegating-to-claude-code
-description: "Delegates task execution to Claude Code via MCP bridge. Use when user prompt contains「用 Claude Code 执行」. Supports 【全自动】and 【半自动】modes."
+name: delegating-to-agent
+description: "Delegates task execution to Claude Code or OpenCode via unified MCP bridge. Use when user prompt contains「用 Agent 执行」. Supports 【全自动】and 【半自动】modes."
 ---
 
-# Delegating Tasks to Claude Code
+# Delegating Tasks to Agent
 
-Delegates task execution to Claude Code via the MCP tool `execute_in_claude_code`. Amp handles planning and supervision.
+Delegates task execution to a chosen agent (Claude Code or OpenCode) via the unified MCP tool `execute_in_agent`. Amp handles planning and supervision.
 
 ## Trigger
 
-Activated when the user prompt contains「用 Claude Code 执行」.
+Activated when the user prompt contains「用 Agent 执行」.
+
+## Agent Selection
+
+The user specifies which agent to use in their prompt:
+
+- **Claude Code**: User mentions "Claude" or "Claude Code" → pass `"claude"` as agent param
+- **OpenCode**: User mentions "OpenCode" → pass `"opencode"` as agent param
+- **Not specified**: Ask the user which agent to use before proceeding.
 
 ## Available MCP Tools
 
 | Tool | Purpose |
 |------|---------|
-| `execute_in_claude_code` | Execute a single step. Params: `prompt`, `workdir`, `step` (optional) |
-| `rollback_claude_code` | Rollback all uncommitted changes. Params: `workdir` |
-| `check_claude_code_changes` | View current uncommitted changes. Params: `workdir` |
+| `execute_in_agent` | Execute a single step. Params: `agent` (`"claude"` / `"opencode"`), `prompt`, `workdir`, `step` (optional) |
+| `rollback_agent` | Rollback all uncommitted changes. Params: `workdir` |
+| `check_agent_changes` | View current uncommitted changes. Params: `workdir` |
 
 ## Execution Modes
 
@@ -32,18 +40,19 @@ Determined by markers in the user prompt:
 ### Phase 1: Planning
 
 1. Understand the user's requirements; ask clarifying questions if needed.
-2. Read relevant code to understand the current implementation.
-3. Create a step-by-step plan. Each step should be a small, independently verifiable change.
-4. Present the plan to the user and wait for confirmation.
-5. The user may revise the plan; iterate until confirmed.
+2. Confirm agent selection (Claude Code or OpenCode).
+3. Read relevant code to understand the current implementation.
+4. Create a step-by-step plan. Each step should be a small, independently verifiable change.
+5. Present the plan to the user and wait for confirmation.
+6. The user may revise the plan; iterate until confirmed.
 
 ### Phase 2: Execution
 
-After the user confirms the plan, call `execute_in_claude_code` for each step sequentially.
+After the user confirms the plan, call `execute_in_agent` for each step sequentially, passing the chosen `agent` value consistently.
 
 #### Prompt Construction for Each Step
 
-Each prompt sent to Claude Code must include:
+Each prompt sent to the agent must include:
 
 ```
 ## Background
@@ -93,15 +102,15 @@ After each step completes, Amp reviews the returned results:
 
 | Severity | Action |
 |----------|--------|
-| Minor (extra comments, formatting) | Send a correction prompt to Claude Code for minor adjustments |
-| Moderate (wrong files, logic deviation) | Call `rollback_claude_code`, reorganize the prompt, and retry |
+| Minor (extra comments, formatting) | Send a correction prompt to the agent for minor adjustments |
+| Moderate (wrong files, logic deviation) | Call `rollback_agent`, reorganize the prompt, and retry |
 | Severe (widespread incorrect changes) | Rollback, pause execution, report to the user and ask for guidance |
 
 ## Completion Report
 
 After all steps are completed, report to the user:
 
-1. Which steps were completed
+1. Which steps were completed (and which agent was used)
 2. Total files modified
 3. Final typecheck and lint status
 4. Any items requiring manual user review

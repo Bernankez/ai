@@ -1,5 +1,5 @@
 {
-  "name": "claude-code-bridge",
+  "name": "agent-bridge",
   "type": "module",
   "version": "1.0.0",
   "main": "dist/index.js",

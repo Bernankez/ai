@@ -6,22 +6,32 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 const server = new McpServer({
-  name: "claude-code-bridge",
+  name: "agent-bridge",
   version: "1.0.0",
 });
+
+const agentEnum = z.enum(["claude", "opencode"]);
+type Agent = z.infer<typeof agentEnum>;
 
 function exec(cmd: string, cwd: string): string {
   return execSync(cmd, { cwd, encoding: "utf-8" }).trim();
 }
 
-function runClaudeCode(prompt: string, workdir: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const args = ["-p", prompt, "--output-format", "text"];
+function buildAgentArgs(agent: Agent, prompt: string): { command: string; args: string[] } {
+  if (agent === "claude") {
+    return { command: "claude", args: ["-p", prompt, "--output-format", "text"] };
+  }
+  return { command: "opencode", args: ["run", prompt] };
+}
 
-    const proc = spawn("claude", args, {
+function runAgent(agent: Agent, prompt: string, workdir: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const { command, args } = buildAgentArgs(agent, prompt);
+
+    const proc = spawn(command, args, {
       cwd: workdir,
       env: { ...process.env },
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
 
     let stdout = "";
@@ -44,10 +54,9 @@ function runClaudeCode(prompt: string, workdir: string): Promise<string> {
     });
 
     proc.on("error", (err) => {
-      reject(new Error(`无法启动 claude CLI: ${err.message}`));
+      reject(new Error(`无法启动 ${agent} CLI: ${err.message}`));
     });
 
-    // 超时保护 10 分钟
     const timer = setTimeout(() => {
       proc.kill();
       reject(new Error("执行超时 (10min)"));
@@ -60,29 +69,27 @@ function runClaudeCode(prompt: string, workdir: string): Promise<string> {
 // ── 工具 1：执行任务 ─────────────────────────────────────────
 
 server.registerTool(
-  "execute_in_claude_code",
+  "execute_in_agent",
   {
-    description: "将一个步骤交给 Claude Code 执行，返回执行结果和变更摘要",
+    description: "将一个步骤交给指定 Agent (claude / opencode) 执行，返回执行结果和变更摘要",
     inputSchema: {
+      agent: agentEnum.describe("选择执行的 Agent：claude 或 opencode"),
       prompt: z.string().describe("要执行的指令，需包含充分的上下文和明确的目标"),
       workdir: z.string().describe("工作目录的绝对路径"),
       step: z.string().optional().describe("步骤编号，如 '1/5'，用于标记"),
     },
   },
-  async ({ prompt, workdir, step }) => {
+  async ({ agent, prompt, workdir, step }) => {
     const label = step ?? "unknown";
 
     try {
-      // 执行
-      const output = await runClaudeCode(prompt, workdir);
+      const output = await runAgent(agent, prompt, workdir);
 
-      // 收集变更摘要
       let diffStat = "";
       let diffContent = "";
       try {
         diffStat = exec("git diff --stat", workdir);
         diffContent = exec("git diff", workdir);
-        // 截断过长的 diff
         if (diffContent.length > 8000) {
           diffContent = `${diffContent.slice(0, 8000)}\n... (diff 过长，已截断)`;
         }
@@ -92,9 +99,9 @@ server.registerTool(
       }
 
       const result = [
-        `## 步骤 ${label} 执行完成`,
+        `## 步骤 ${label} 执行完成 (via ${agent})`,
         "",
-        "### Claude Code 输出",
+        `### ${agent} 输出`,
         output.length > 4000 ? output.slice(-4000) : output,
         "",
         "### 文件变更摘要",
@@ -109,7 +116,7 @@ server.registerTool(
     catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       return {
-        content: [{ type: "text", text: `步骤 ${label} 执行失败: ${message}` }],
+        content: [{ type: "text", text: `步骤 ${label} 执行失败 (${agent}): ${message}` }],
         isError: true,
       };
     }
@@ -119,9 +126,9 @@ server.registerTool(
 // ── 工具 2：回滚变更 ─────────────────────────────────────────
 
 server.registerTool(
-  "rollback_claude_code",
+  "rollback_agent",
   {
-    description: "回滚 Claude Code 的修改（恢复所有未提交的变更）",
+    description: "回滚 Agent 的修改（恢复所有未提交的变更）",
     inputSchema: {
       workdir: z.string().describe("工作目录的绝对路径"),
     },
@@ -134,7 +141,6 @@ server.registerTool(
       }
 
       exec("git checkout -- .", workdir);
-      // 清理新增的未跟踪文件
       exec("git clean -fd", workdir);
 
       return { content: [{ type: "text", text: `已回滚。恢复前的变更:\n${status}` }] };
@@ -152,9 +158,9 @@ server.registerTool(
 // ── 工具 3：检查变更状态 ─────────────────────────────────────
 
 server.registerTool(
-  "check_claude_code_changes",
+  "check_agent_changes",
   {
-    description: "查看 Claude Code 当前的未提交变更",
+    description: "查看 Agent 当前的未提交变更",
     inputSchema: {
       workdir: z.string().describe("工作目录的绝对路径"),
     },
