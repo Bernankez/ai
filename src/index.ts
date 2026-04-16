@@ -40,7 +40,7 @@ const SKILL_TARGETS: TargetEntry[] = [
   { target: { name: "Amp (amp)", path: join(homedir(), ".config", "amp", "skills") }, commands: ["amp"] },
   { target: { name: "VS Code (Copilot)", path: join(homedir(), ".copilot", "skills") }, commands: ["code"], appPaths: ["/Applications/Visual Studio Code.app"] },
   { target: { name: "Cursor", path: join(homedir(), ".cursor", "skills") }, commands: ["cursor"], appPaths: ["/Applications/Cursor.app"] },
-  { target: { name: "Factory", path: join(homedir(), ".factory", "skills") }, commands: ["droid"] },
+  { target: { name: "Factory (Droid)", path: join(homedir(), ".factory", "skills") }, commands: ["droid"] },
 ];
 
 const SKILLS_DIR = resolve(import.meta.dirname, "..", "skills");
@@ -208,6 +208,10 @@ const MCP_TARGETS: McpTargetEntry[] = [
     target: { name: "Cursor", configPath: join(homedir(), ".cursor", "mcp.json"), serverKey: "mcpServers" },
     commands: ["cursor"],
     appPaths: ["/Applications/Cursor.app"],
+  },
+  {
+    target: { name: "Factory (Droid)", configPath: join(homedir(), ".factory", "mcp.json"), serverKey: "mcpServers" },
+    commands: ["droid"],
   },
 ];
 
