@@ -5,7 +5,7 @@
     "claude-code-bridge": {
       "_description": "Bridges Amp to Claude Code. Provides execute_in_claude_code, rollback_claude_code, and check_claude_code_changes tools.",
       "command": "node",
-      "args": ["/Volumes/KIOXIA/Projects/ai/mcp/claude-code-bridge/dist/index.js"]
+      "args": ["claude-code-bridge/dist/index.js"]
     }
   }
 }
